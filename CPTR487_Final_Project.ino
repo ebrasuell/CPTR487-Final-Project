@@ -11,44 +11,45 @@
  *  This example is in public domain.
  *
  *  Edited by Jordan Davis and Eric Brasuell, May 3 2020
- *  Updated it to inclued support for ESP32 and the u8g2 screen
+ *  Updated it to inclued support for ESP32 and the U8g2 screen library
  */
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <U8g2lib.h>
-#define BUTTON                    18
-#define LEDBLUE                   25
+#define BUTTON                    18  //Pin for button
+#define LED                       25  //Pin for board LED
 #define FONT_ONE_HEIGHT           8
 #define FONT_TWO_HEIGHT           20
-#define PHOTOCELL_PIN             34
 char      chBuffer[128];
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C       u8g2(U8G2_R0, 16, 15, 4);
 
-const char* chSSID = "ALLOD651E";
-const char* password = "189557559";
+const char* chSSID = "WIFI SSID"; //Insert WIFI SSID here
+const char* password = "WIFI password"; //Insert WIFI password here
 
 const char* host = "api.lifx.com";
 const int httpsPort = 443;
 
-int usleep(useconds_t usec);
-
-
+int usleep(useconds_t usec); 
 
 // Use web browser to view and copy
 // SHA1 fingerprint of the certificate
 bool buttonPressed;
 void setup() {
+  //Serial baud rate
   Serial.begin(115200);
+
+  //setup for Ledc Code
   ledcSetup(0, 1E5, 12);
   ledcAttachPin(26, 0); // Change 25 to 26 as required
   ledcWrite(26, 25);
 
-    pinMode(BUTTON, INPUT_PULLUP);
-    pinMode(LEDBLUE, OUTPUT);
-      digitalWrite(LEDBLUE, 1);
+  pinMode(BUTTON, INPUT_PULLUP);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, 1);
 
+  //Setup for u8g2 screen
   u8g2.begin();
   u8g2.setFont(u8g2_font_6x10_tr);
   u8g2.setFontRefHeightExtendedText();
@@ -57,6 +58,7 @@ void setup() {
   u8g2.setFontDirection(0);
   
   buttonPressed = false;
+  //write to screen that it is attempting to connect to SSID
   u8g2.clearBuffer();
   sprintf(chBuffer, "%s", "Connecting to:");
   u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 0, chBuffer);
@@ -73,18 +75,22 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-  digitalWrite(LEDBLUE, 0);
+  digitalWrite(LED, 0);
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
   char  chIp[81];
+
+  //write ip address to screen (proves if connected)
   u8g2.clearBuffer();
   WiFi.localIP().toString().toCharArray(chIp, sizeof(chIp) - 1);
   sprintf(chBuffer, "IP  : %s", chIp);
   u8g2.drawStr(0, FONT_ONE_HEIGHT * 2, chBuffer);
   u8g2.sendBuffer();
+
+  //write to screen the SSID you are connected to 
   u8g2.clearBuffer();
   delay(2000);
   sprintf(chBuffer, "%s", "Connected to:");
@@ -96,6 +102,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(BUTTON), button, FALLING);
 }
 
+
+// Requests Light status from Lifx API & displays light status on screen (on/off/Error *Error only prints in Serial Monitor*)
 void getLightStatus(){
   WiFiClientSecure client;
   Serial.print("connecting to ");
@@ -104,6 +112,7 @@ void getLightStatus(){
       Serial.println("connection failed");
       return;
   }
+  //https://api.developer.lifx.com/docs/list-lights
   String url = "/v1/lights/all";
   Serial.print("requesting URL: ");
   Serial.println(url);
@@ -111,8 +120,8 @@ void getLightStatus(){
   client.print(String("GET ") + url + "?duration=2 HTTP/1.1\r\n" +
               "Host: " + host + "\r\n" +
               "User-Agent: BuildFailureDetectorESP8266\r\n" +
-              //Bearer [device token]
-              "Authorization: Bearer ccbad8522a9293c67a1376b622e3d458721c8d22e8109b252a26f72d96b6e96f\r\n" +
+              //Authorization: Bearer [device token]\r\n
+              "Authorization: Bearer [device token]\r\n" + //Add your device token here
               "Connection: close\r\n\r\n");
 
   Serial.println("request sent");
@@ -123,7 +132,6 @@ void getLightStatus(){
       break;
   }
   }
-  //String line = client.readStringUntil('\n');
 
   String line;
   String chunk;
@@ -133,32 +141,30 @@ void getLightStatus(){
     chunk = client.readStringUntil('\n');
   }
   Serial.println(chunk);
-  int statusIndex = line.indexOf("\"power\": \"");
-  if(line.charAt(statusIndex + 11) == 'f') // light is off
-  {
+  int statusIndex = line.indexOf("\"power\": \""); //look for "power" header in reply
+
+  //print light status to screen
+  if(line.charAt(statusIndex + 11) == 'f') {    // Look for the twelfth character of the "power" header in reply. If letter is "f", write to screen
     u8g2.clearBuffer();
     sprintf(chBuffer, "%s", "Light is off");
     u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 31 - (FONT_ONE_HEIGHT / 2), chBuffer);
     u8g2.sendBuffer();
 
-  } else if(line.charAt(statusIndex + 11) == 'n')
-  {
+  } else if(line.charAt(statusIndex + 11) == 'n') {   // if letter is "n", write to screen
     u8g2.clearBuffer();
     sprintf(chBuffer, "%s", "Light is on");
     u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 31 - (FONT_ONE_HEIGHT / 2), chBuffer);
     u8g2.sendBuffer();
   
-  } else
-  {
+  } else {    //write errors in serial
     Serial.print("Error: Character is: ");
     Serial.println(line.charAt(statusIndex  + 11));
 
   }
-  //delay(3000);
 }
 
 //When button is pressed, print to serial
-//"u8g2" code is screen
+//"u8g2" code is screen 
 
 void button(){
   buttonPressed=true;
@@ -178,6 +184,8 @@ void toggleLight(){
       Serial.println("connection failed");
       return;
   }
+
+  //https://api.developer.lifx.com/docs/toggle-power
   String url = "/v1/lights/all/toggle";
   Serial.print("requesting URL: ");
   Serial.println(url);
@@ -185,19 +193,19 @@ void toggleLight(){
   client.print(String("POST ") + url + "?duration=2 HTTP/1.1\r\n" +
               "Host: " + host + "\r\n" +
               "User-Agent: BuildFailureDetectorESP8266\r\n" +
-              //Bearer [device token]
-              "Authorization: Bearer ccbad8522a9293c67a1376b622e3d458721c8d22e8109b252a26f72d96b6e96f\r\n" +
+              //Authorization: Bearer [device token]\r\n
+              "Authorization: Bearer [device token]\r\n" + //Add your device token here
               "Connection: close\r\n\r\n");
 
   Serial.println("request sent");
   while (client.connected()) {
-      String line = client.readStringUntil('\n');
-      if (line == "\r") {
-      Serial.println("headers received");
-      break;
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+    Serial.println("headers received");
+    break;
+    }
   }
-  }
-  //String line = client.readStringUntil('\n');
+  
 
   String line;
   String chunk;
@@ -207,24 +215,20 @@ void toggleLight(){
     chunk = client.readStringUntil('\n');
   }
   int statusIndex = line.indexOf("\"power\": \"");
-  if(line.charAt(statusIndex + 11) == 'f') // light is off
-  {
-    Serial.println("Light is off");
 
-  } else if(line.charAt(statusIndex + 11) == 'n')
-  {
+  //print light status to serial
+  if(line.charAt(statusIndex + 11) == 'f') {    // light is off
+    Serial.println("Light is off");
+  } else if(line.charAt(statusIndex + 11) == 'n'){
     Serial.println("Light is on");
-  
-  } else
-  {
+  } else{
     Serial.print("Error: Character is: ");
     Serial.println(line.charAt(statusIndex  + 11));
-
   }
   
 
 
-
+  //write reply headers to serial
   Serial.println("reply was:");
   Serial.println("==========");
   Serial.println(line);
@@ -235,10 +239,13 @@ void toggleLight(){
 
 void megalovania(){
 
-    u8g2.clearBuffer();
-    sprintf(chBuffer, "%s", "Playing Music");
-    u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 31 - (FONT_ONE_HEIGHT / 2), chBuffer);
-    u8g2.sendBuffer();
+  //write "Playing Music" to screen while tones are being played
+  u8g2.clearBuffer();
+  sprintf(chBuffer, "%s", "Playing Music"); 
+  u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 31 - (FONT_ONE_HEIGHT / 2), chBuffer);
+  u8g2.sendBuffer();
+
+  //ledcWriteTone(buzzChannel, frequency);
 
   ledcWriteTone(0, 294);//D4
   delay(125);
@@ -357,7 +364,7 @@ void megalovania(){
   ledcWriteTone(0, 415);//Ab4
   delay(125);
   usleep(250);
-  ledcWriteTone(0, 0);
+  ledcWriteTone(0, 0);//last played tone hangs and keeps playing, so this tells it to stop playing tone
 }
 
 
@@ -365,7 +372,9 @@ void megalovania(){
 void loop() {
   getLightStatus();
   if(buttonPressed){
-    digitalWrite(LEDBLUE, 1);
+    digitalWrite(LED, 1); //turn on board LED if button is pressed
+
+    //write button pressed to screen
     u8g2.clearBuffer();
     sprintf(chBuffer, "%s", "Button Pressed");
     u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 0, chBuffer);
@@ -373,11 +382,14 @@ void loop() {
     u8g2.drawStr(64 - (u8g2.getStrWidth(chBuffer) / 2), 31 - (FONT_ONE_HEIGHT / 2), chBuffer);
     u8g2.sendBuffer();
 
+    //toggle light
     toggleLight();
     delay(3000);
+    //play music
     megalovania();
 
+    //turn off board LED when button is not pressed
     buttonPressed=false;
-    digitalWrite(LEDBLUE, 0);
+    digitalWrite(LED, 0);
   }
 }
